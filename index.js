@@ -1,7 +1,7 @@
+var https = require('https');
+var fs = require("fs");
 var express = require('express');
 var app = express();
-var http = require('http').createServer(app);
-var io = require('socket.io')(http);
 
 const stun = require('stun');
 const { STUN_BINDING_RESPONSE, STUN_EVENT_BINDING_REQUEST } = stun.constants;
@@ -33,7 +33,7 @@ stunServer.run = function() {
     const server = stun.createServer({ type: 'udp4' });
     const port = process.env.STUN_PORT || 19302;
     server.listen(port, "0.0.0.0", () => {
-        console.log('[stun] server started port:' + port);
+        console.log('[stun] server started port:', port, server);
     });
 
     stunServer.handle(server);
@@ -58,10 +58,23 @@ stunServer.handle = function(server) {
     });
 }
 
-//stunServer.run();
+stunServer.run();
 
 
 app.use(express.static('public'));
+
+var options = {
+    key: fs.readFileSync('./ssl/privatekey.pem'),
+    cert: fs.readFileSync('./ssl/certificate.pem')
+};
+
+var port = process.env.PORT || 3000;
+var server = https.createServer(options, app).listen(port, function () {
+    console.log('Nodejs-ssh Https server listening on port', port);
+});
+
+var io = require('socket.io')(server);
+
 // When a socket connects, set up the specific listeners we will use.
 io.on('connection', function(socket){
   // When a client tries to join a room, only allow them if they are first or
@@ -86,9 +99,9 @@ io.on('connection', function(socket){
   // When receiving the token message, use the Twilio REST API to request an
   // token to get ephemeral credentials to use the TURN server.
   socket.on('token', function(){
-	var ip = process.env.TURN_IP || '0.0.0.0';
-	var token = {"iceServers":[{"urls":[`turn:${ip}:3478`],"username":"forsrc","credential":"forsrc"}],"iceTransportPolicy":"all","iceCandidatePoolSize":"0"};
-	console.log('Received token request', token)
+    var ip = process.env.TURN_IP || '0.0.0.0';
+    var token = {"iceServers":[{"urls":[`turn:${ip}:3478`],"username":"forsrc","credential":"forsrc"}],"iceTransportPolicy":"all","iceCandidatePoolSize":"0"};
+    console.log('Received token request', token)
     socket.emit('token', token);
 
   });
@@ -112,6 +125,3 @@ io.on('connection', function(socket){
   });
 });
 
-http.listen(3000, function() {
-  console.log('listening on *:3000');
-});

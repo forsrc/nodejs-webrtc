@@ -13,7 +13,7 @@ turnServer.run = function() {
     var turnPort = process.env.TURN_PORT || 3478;
     var server = new Turn({
         listeningPort: turnPort,
-        listeningIps: process.env.TURN_IPS ? process.env.TURN_IPS.split(",") : [process.env.TURN_IP || '0.0.0.0'],
+        //listeningIps: process.env.TURN_IPS ? process.env.TURN_IPS.split(",") : [process.env.TURN_IP || '0.0.0.0'],
         authMech: 'long-term',
         credentials: {
             forsrc: "forsrc"
@@ -100,7 +100,8 @@ io.on('connection', function(socket){
   // token to get ephemeral credentials to use the TURN server.
   socket.on('token', function(){
     var ip = process.env.TURN_IP || '0.0.0.0';
-    var token = {"iceServers":[{"urls":[`turn:${ip}:3478`],"username":"forsrc","credential":"forsrc"}],"iceTransportPolicy":"all","iceCandidatePoolSize":"0"};
+	var port = process.env.TURN_PORT || 3478;
+    var token = {"iceServers":[{"urls":[`turn:${ip}:${port}`],"username":"forsrc","credential":"forsrc"}],"iceTransportPolicy":"all","iceCandidatePoolSize":"0"};
     console.log('Received token request', token)
     socket.emit('token', token);
 

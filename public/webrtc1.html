@@ -1,0 +1,141 @@
+<html>
+
+<head>
+	<title>webrtc 1</title>
+</head>
+
+<body>
+	<h2>webrtc 1</h2>
+	<div>
+		<video id="video-local" playsinline autoplay muted></video>
+		<button id="buttonStartLocal">Start Local</button>
+	</div>
+	<div>
+		<video id="video-remote" playsinline autoplay muted></video>
+		<button id="buttonStartRemote">Start Remote</button>
+	</div>
+</body>
+<script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+<script>
+
+
+	const servers = {
+		"iceServers":
+			[{ "urls": ["turn:" + window.location.hostname + ":3478"], "username": "forsrc", "credential": "forsrc" }],
+		"iceTransportPolicy": "all", "iceCandidatePoolSize": "0"
+	};
+
+	const offerOptions = {
+		offerToReceiveAudio: 1,
+		offerToReceiveVideo: 1
+	};
+
+	const buttonStartLocal = document.getElementById('buttonStartLocal');
+	buttonStartLocal.disabled = false;
+
+	const buttonStartRemote = document.getElementById('buttonStartRemote');
+	buttonStartRemote.disabled = true;
+
+	var local = null;
+	var remote = null;
+
+	buttonStartLocal.onclick = function () {
+		buttonStartLocal.disabled = true;
+		var video = document.getElementById("video-local");
+		navigator.mediaDevices
+			.getUserMedia({
+				audio: true,
+				video: true
+			})
+			.then(stream => {
+				console.log('Received local stream');
+				video.srcObject = stream;
+
+				const audioTracks = stream.getAudioTracks();
+				const videoTracks = stream.getVideoTracks();
+				if (audioTracks.length > 0) {
+					console.log(`Using audio device: ${audioTracks[0].label}`);
+				}
+				if (videoTracks.length > 0) {
+					console.log(`Using video device: ${videoTracks[0].label}`);
+				}
+
+
+				buttonStartRemote.disabled = false;
+			})
+			.catch(e => console.log('getUserMedia() error:', e));
+	}
+
+
+	buttonStartRemote.onclick = function () {
+		buttonStartRemote.disabled = true;
+
+		var video = document.getElementById("video-local");
+		var stream = video.srcObject
+
+
+
+		local = new RTCPeerConnection(servers);
+		remote = new RTCPeerConnection(servers);
+
+
+
+		stream.getTracks().forEach(track => {
+			local.addTrack(track, stream);
+		});
+
+		local.onicecandidate = function (event) {
+			var candidate = event.candidate
+			remote.addIceCandidate(candidate)
+				.then(() => {
+					console.log('remote AddIceCandidate success.');
+				}, error => {
+					console.log(`Failed to add ICE candidate: ${error.toString()}`);
+				});
+
+			console.log(`remote ICE candidate: ${candidate ? candidate.candidate : '(null)'}`);
+		}
+
+		local
+			.createOffer(offerOptions)
+			.then(desc => {
+				local.setLocalDescription(desc);
+				console.log(`Offer from local\n${desc.sdp}`);
+				remote.setRemoteDescription(desc);
+				remote.createAnswer().then(desc => {
+					remote.setLocalDescription(desc);
+					console.log(`Answer from remote\n${desc.sdp}`);
+					local.setRemoteDescription(desc);
+				}, error => {
+					console.log(`Failed to create session description: ${error.toString()}`);
+				});
+			}, error => {
+				console.log(`Failed to create session description: ${error.toString()}`);
+			});
+
+
+		remote.ontrack = function (e) {
+			var videoRemote = document.getElementById("video-remote");
+			if (videoRemote.srcObject !== e.streams[0]) {
+				videoRemote.srcObject = e.streams[0];
+				console.log('received remote stream');
+			}
+		}
+
+		remote.onicecandidate = function (event) {
+			var candidate = event.candidate
+			local.addIceCandidate(candidate)
+				.then(() => {
+					console.log('local AddIceCandidate success.');
+				}, error => {
+					console.log(`Failed to add ICE candidate: ${error.toString()}`);
+				});
+			console.log(`remote ICE candidate: ${candidate ? candidate.candidate : '(null)'}`);
+		}
+	}
+
+
+
+</script>
+
+</html>

@@ -1,0 +1,57 @@
+<html>
+
+<head>
+	<title>webrtc 2</title>
+</head>
+
+<body>
+	<h2>webrtc 2</h2>
+	<div>
+		<video id="video-local" playsinline autoplay muted></video>
+		<button id="buttonStartLocal">Start Local</button>
+	</div>
+	<div>
+		<video id="video-remote" playsinline autoplay muted></video>
+		<button id="buttonStartRemote">Start Remote</button>
+	</div>
+</body>
+<script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+<script>
+
+	const server = {
+		"iceServers":
+			[{ "urls": ["turn:" + window.location.hostname + ":3478"], "username": "forsrc", "credential": "forsrc" }],
+		"iceTransportPolicy": "all", "iceCandidatePoolSize": "0"
+	};
+
+	const buttonStartLocal = document.getElementById('buttonStartLocal');
+	buttonStartLocal.disabled = false;
+
+	const buttonStartRemote = document.getElementById('buttonStartRemote');
+	buttonStartRemote.disabled = false;
+
+
+	buttonStartLocal.onclick = function () {
+		buttonStartLocal.disabled = true;
+		start("video-local");
+		pc1Local = new RTCPeerConnection(servers);
+	}
+
+	function start(videoId) {
+		var video = document.getElementById(videoId);
+		navigator.mediaDevices
+			.getUserMedia({
+				audio: true,
+				video: true
+			})
+			.then(stream => {
+				console.log('Received stream:', videoId);
+				video.srcObject = stream;
+			})
+			.catch(e => console.log('getUserMedia() error:', videoId, e));
+	}
+
+
+</script>
+
+</html>

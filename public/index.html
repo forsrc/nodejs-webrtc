@@ -19,12 +19,12 @@
   </head>
   <body>
     <h1>Video Chat</h1>
-    <video id="local-video" height="150" autoplay></video>
-    <video id="remote-video" height="150" autoplay></video>
+    <video id="video-local"  height="300" playsinline autoplay muted></video>
+    <video id="video-remote" height="300" playsinline autoplay muted></video>
 
     <div>
-      <button id="get-video">Get Video</button>
-      <button id="call" disabled="disabled">Call</button>
+      <button id="buttonStartLocal">Get Video</button>
+      <button id="buttonStartRemote" disabled="disabled">Call</button>
     </div>
     <p>Log messages:</p>
     <div id="logs">

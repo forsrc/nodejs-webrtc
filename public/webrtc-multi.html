@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+</head>
+
+<style>
+	.videos {
+		display: flex;
+		flex-wrap: wrap;
+	}
+
+	.videos>div {
+		width: 40%;
+		padding: 2px;
+	}
+
+	video {
+		width: 100%;
+	}
+</style>
+
+<body>
+	<div class="videos">
+		<div>
+			<video id="localVideo" autoplay muted playsinline></video>
+			<!-- <div class="soundbar"><span class="currentVolume"></span></div> -->
+		</div>
+	</div>
+
+	<br />
+	<div id="connections"></div>
+
+	<script src="/socket.io/socket.io.js"></script>
+	<script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+	<script src="webrtc-multi.js"></script>
+
+	<script type="text/javascript">
+		pageReady();
+	</script>
+
+</body>
+
+</html>

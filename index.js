@@ -37,7 +37,7 @@ app.use(express.static('public'));
 
 app.get('/room/:room', (req, res) => {
   console.log(req.params);
-  res.sendFile(path.resolve(__dirname + '/public/webrtc.html'));
+  res.sendFile(path.resolve(__dirname + '/public/webrtc-multi.html'));
 });
 
 var options = {
@@ -58,15 +58,16 @@ var io = require('socket.io')(server);
 io.on('connection', function (socket) {
   // When a client tries to join a room, only allow them if they are first or
   // second in the room. Otherwise it is full.
+  var _room = null;
   socket.on('join', function (room) {
     console.log('A client joined', room)
     var clients = io.sockets.adapter.rooms[room];
     var length = typeof clients !== 'undefined' ? clients.length : 0;
     socket.join(room);
+    _room = room;
     console.log(room, length);
 
     if (length >= 1) {
-      socket.join(room);
       socket.emit('ready', room);
       socket.to(room).emit('ready', room);
       console.log(room, 'is ready');
@@ -86,45 +87,53 @@ io.on('connection', function (socket) {
 
   });
 
-  socket.on('log', function (room, id, log) {
-    console.log(room, id, log)
+  socket.on('log', function (id, log) {
+    console.log(_room, id, log)
   });
 
   // Relay candidate messages
-  socket.on('candidate', function (room, candidate) {
-    console.log(room, 'Received candidate. Broadcasting...')
-    socket.to(room).emit('candidate', candidate);
+  socket.on('candidate', function (candidate) {
+    console.log(_room, 'Received candidate. Broadcasting...')
+    socket.to(_room).emit('candidate', candidate);
     //socket.broadcast.emit('candidate', candidate);
   });
 
   // Relay offers
-  socket.on('offer', function (room, offer) {
-    console.log(room, 'Received offer. Broadcasting...')
-    socket.to(room).emit('offer', offer);
+  socket.on('offer', function (offer) {
+    console.log(_room, 'Received offer. Broadcasting...')
+    socket.to(_room).emit('offer', offer);
     //socket.broadcast.emit('offer', offer);
   });
 
   // Relay answers
-  socket.on('answer', function (room, answer) {
-    console.log(room, 'Received answer. Broadcasting...')
-    socket.to(room).emit('answer', answer);
+  socket.on('answer', function (answer) {
+    console.log(_room, 'Received answer. Broadcasting...')
+    socket.to(_room).emit('answer', answer);
     //socket.broadcast.emit('answer', answer);
   });
 
   ///////////////
 
-  io.sockets.emit("user-joined", socket.id, io.engine.clientsCount, Object.keys(io.sockets.clients().sockets));
+  socket.on('call', (id) => {
+    console.log(_room, 'call', id);
+    socket.to(_room).emit("user-joined", socket.id, io.engine.clientsCount, Object.keys(io.sockets.clients().sockets));
+    socket.emit("user-joined", socket.id, io.engine.clientsCount, Object.keys(io.sockets.clients().sockets));
+  });
+
 
   socket.on('signal', (toId, message) => {
-    io.to(toId).emit('signal', socket.id, message);
+    console.log(_room, 'signal', toId);
+    socket.to(toId).emit('signal', socket.id, message)
   });
 
   socket.on("message", function (data) {
-    io.sockets.emit("broadcast-message", socket.id, data);
+    socket.to(_room).emit("broadcast-message", socket.id, data);
+    socket.emit('signal', socket.id, message);
   })
 
   socket.on('disconnect', function () {
-    io.sockets.emit("user-left", socket.id);
+    socket.to(_room).emit("user-left", socket.id);
+    socket.emit("user-left", socket.id);
   })
 });
 

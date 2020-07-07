@@ -1,4 +1,4 @@
-const socket = io();
+const socket = io({ secure: true });
 const room = "test";
 
 socket.on('connect', () => {
@@ -6,7 +6,7 @@ socket.on('connect', () => {
 
   socket.on('ready', function (room) {
     console.log(room, "is ready.");
-    socket.emit('log', room, socket.id, "OK");
+    socket.emit('log', socket.id, "OK");
     const buttonStartRemote = document.getElementById('buttonStartRemote');
     buttonStartRemote.disabled = false;
   });
@@ -64,7 +64,9 @@ buttonStartLocal.onclick = function () {
 }
 
 
-buttonStartRemote.onclick = function () {
+buttonStartRemote.onclick = call;
+
+function call() {
   buttonStartRemote.disabled = true;
 
   var video = document.getElementById("video-local");
@@ -82,7 +84,7 @@ buttonStartRemote.onclick = function () {
   rtcPeerConnection.onicecandidate = function (event) {
     var candidate = event.candidate
     if (connected) {
-      socket.emit('candidate', room, JSON.stringify(candidate));
+      socket.emit('candidate', JSON.stringify(candidate));
     } else {
       localICECandidates.push(event.candidate);
     }
@@ -115,7 +117,7 @@ buttonStartRemote.onclick = function () {
     connected = true;
     localICECandidates.forEach(candidate => {
       console.log(`>>> Sending local ICE candidate (${candidate.address})`);
-      socket.emit('candidate', room, JSON.stringify(candidate));
+      socket.emit('candidate', JSON.stringify(candidate));
     });
     localICECandidates = [];
   });
@@ -131,7 +133,7 @@ buttonStartRemote.onclick = function () {
       function (answer) {
         console.log(answer);
         rtcPeerConnection.setLocalDescription(answer);
-        socket.emit('answer', room, JSON.stringify(answer));
+        socket.emit('answer', JSON.stringify(answer));
       },
       function (err) {
         console.error(err);
@@ -143,10 +145,11 @@ buttonStartRemote.onclick = function () {
   rtcPeerConnection.createOffer(
     function (offer) {
       rtcPeerConnection.setLocalDescription(offer);
-      socket.emit('offer', room, JSON.stringify(offer));
+      socket.emit('offer', JSON.stringify(offer));
     },
     function (err) {
       console.error(err);
     }
   );
+
 }

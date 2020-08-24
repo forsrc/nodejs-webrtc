@@ -83,22 +83,22 @@ async function call() {
 
 	console.log('Added local stream to pc1');
 
-	var description =  await pc1.createOffer(_offerOptions);
+	var offer =  await pc1.createOffer(_offerOptions);
 	
 	console.log('Offer from pc1 description.sdp');
 	// console.log(`Offer from pc1\n${description.sdp}`);
-	await pc1.setLocalDescription(description);
-	await pc2.setRemoteDescription(description);
+	await pc1.setLocalDescription(offer);
+	await pc2.setRemoteDescription(offer);
 	console.log('pc2 setRemoteDescription complete');
 	
-	var description = await pc2.createAnswer();
+	var answer = await pc2.createAnswer();
 	
 	console.log('Answer from pc2 description.sdp');
 	 // console.log(`Answer from
 		// pc2:\n${description.sdp}`);
 	 
-	await pc2.setLocalDescription(description);
-	await pc1.setRemoteDescription(description);
+	await pc2.setLocalDescription(answer);
+	await pc1.setRemoteDescription(answer);
 
 };
 

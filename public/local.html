@@ -1,0 +1,155 @@
+<html>
+
+<head>
+	<title>webrtc</title>
+</head>
+
+<body>
+	<h2>webrtc</h2>
+	<div class="videos">
+		<div>
+			<video id="localVideo" autoplay muted playsinline></video>
+			<video id="remoteVideo" playsinline autoplay></video>
+		</div>
+	</div>
+</body>
+<script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+<script>
+
+'use strict';
+
+const _peerConnectionConfig = {
+	"iceServers" : [ {
+		"urls" : [ "stun:stun.l.google.com:19302" ]
+	} ],
+	"iceTransportPolicy" : "all"
+}, constraints = {
+	"optional" : [ {
+		"googIPv6" : true
+	} ]
+}
+
+const _localVideo = document.getElementById('localVideo');
+const _remoteVideo = document.getElementById('remoteVideo');
+
+const _offerOptions = {
+	offerToReceiveAudio : 1,
+	offerToReceiveVideo : 1
+};
+
+(function() {
+
+	if (!navigator.mediaDevices.getUserMedia) {
+		alert('Your browser does not support getUserMedia API');
+		return;
+	}
+	navigator.mediaDevices.getUserMedia({
+		video : true,
+		audio : false
+	}).then(function(stream) {
+		_localVideo.srcObject = stream;
+		const videoTracks = stream.getVideoTracks();
+		const audioTracks = stream.getAudioTracks();
+		if (videoTracks.length > 0) {
+			console.log(`Using video device: ${videoTracks[0].label}`);
+		}
+		if (audioTracks.length > 0) {
+			console.log(`Using audio device: ${audioTracks[0].label}`);
+		}
+	}).then(function() {
+		
+		var pc1 = new RTCPeerConnection(_peerConnectionConfig);
+		console.log('Created local peer connection object pc1');
+		var pc2 = new RTCPeerConnection(_peerConnectionConfig);
+		console.log('Created remote peer connection object pc2');
+
+		// addEventListener icecandidate
+		pc1.onicecandidate = function(event){
+			pc2.addIceCandidate(event.candidate)
+		      .then(function(){console.log('pc2 addIceCandidate success');})
+		      .catch( function(error){console.log(`'pc2' failed to add ICE Candidate: ${error.toString()}`);});
+		};
+		
+		pc2.onicecandidate = function(event){
+			pc1.addIceCandidate(event.candidate)
+		      .then(function(){console.log('pc1 addIceCandidate success');})
+		      .catch(function(error){console.log(`'pc1' failed to add ICE Candidate: ${error.toString()}`);});
+		};
+
+		// addEventListener oniceconnectionstatechange
+		pc1.oniceconnectionstatechange = function(event){
+			 console.log(`$'pc1' ICE state: ${pc1.iceConnectionState}`);
+			 console.log('ICE state change event: ', event);
+		};
+		 
+		pc2.oniceconnectionstatechange = function(event){
+			 console.log(`$'pc2' ICE state: ${pc1.iceConnectionState}`);
+			 console.log('ICE state change event: ', event);
+		};
+		 
+
+		// ontrack
+		pc2.ontrack = function(event){
+			if (_remoteVideo.srcObject !== event.streams[0]) {
+			    _remoteVideo.srcObject = event.streams[0];
+			    console.log('pc2 received remote stream');
+			  }
+		};
+
+		const localStream = _localVideo.srcObject;
+		localStream.getTracks().forEach(function(track) {
+			pc1.addTrack(track, localStream);
+		});
+
+		console.log('Added local stream to pc1');
+
+		pc1.createOffer(_offerOptions)
+			.then(function(description){
+				console.log('Offer from pc1 description.sdp');
+				//console.log(`Offer from pc1\n${description.sdp}`);
+				pc1.setLocalDescription(description)
+					.then(function() {
+						console.log('pc1 setLocalDescription complete');
+					}).catch(function(err) {
+						console.log(err);
+					});
+				pc2.setRemoteDescription(description)
+				.then(function() {
+					console.log('pc2 setRemoteDescription complete');
+					
+					pc2.createAnswer()
+						.then(function(description) {
+							console.log('Answer from pc2 description.sdp');
+							 //console.log(`Answer from pc2:\n${description.sdp}`);
+							 
+							 pc2.setLocalDescription(description)
+							 	.then(function() {
+									console.log('pc2 setLocalDescription complete');
+								}).catch(function(err) {
+									console.log(err);
+								});
+							 
+							 pc1.setRemoteDescription(description)
+							 	.then(function() {
+									console.log('pc1 setLocalDescription complete');
+								}).catch(function(err) {
+									console.log(err);
+								});
+							 
+							 
+						}).catch(function(err) {
+							console.log(err);
+						});;
+					
+				}).catch(function(err) {
+					console.log(err);
+				});  
+        })
+		
+	});
+
+})();
+
+</script>
+
+</html>

@@ -1,36 +1,27 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="UTF-8" />
-    <title>Video Chat</title>
-    <style>
-    
-    div#logs p {
-      margin: 0;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 9px;
-    }
+    <head>
+        <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+        <link rel="stylesheet" href="main.css">
+    </head>
 
-    div#logs p.error {
-      color: red;
-    }
-    
-    </style>
-  </head>
-  <body>
-    <h1>Video Chat</h1>
-    <video id="video-local"  height="300" playsinline autoplay muted></video>
-    <video id="video-remote" height="300" playsinline autoplay muted></video>
+    <body>
+        <div class="videos">
+            <div>
+                <video id="localVideo" autoplay muted playsinline ></video>
+                <!-- <div class="soundbar"><span class="currentVolume"></span></div> -->
+            </div>
+        </div>
+        
+        <br />
+        <div id="connections"></div>
 
-    <div>
-      <button id="buttonStartLocal">Get Video</button>
-      <button id="buttonStartRemote" disabled="disabled">Call</button>
-    </div>
-    <p>Log messages:</p>
-    <div id="logs">
-    </div>
+        <script src="socket.io/socket.io.js"></script>
+        <script src="app.js"></script>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="/app.js"></script>
-  </body>
+        <script type="text/javascript">
+            pageReady();
+        </script>
+
+    </body>
 </html>

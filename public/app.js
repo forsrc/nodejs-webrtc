@@ -1,155 +1,130 @@
-const socket = io({ secure: true });
-const room = "test";
+var localVideo;
+var firstPerson = false;
+var socketCount = 0;
+var socketId;
+var localStream;
+var connections = [];
 
-socket.on('connect', () => {
-
-
-  socket.on('ready', function (room) {
-    console.log(room, "is ready.");
-    socket.emit('log', socket.id, "OK");
-    const buttonStartRemote = document.getElementById('buttonStartRemote');
-    buttonStartRemote.disabled = false;
-  });
-});
-
-
-
-
-const servers = {
-  "iceServers":
-    [{ "urls": ["turn:" + window.location.hostname + ":3478"], "username": "forsrc", "credential": "forsrc" }],
-  "iceTransportPolicy": "all", "iceCandidatePoolSize": "0"
+var peerConnectionConfig = {
+    'iceServers': [
+        {'urls': 'stun:stun.services.mozilla.com'},
+        {'urls': 'stun:stun.l.google.com:19302'},
+    ]
 };
 
-const offerOptions = {
-  offerToReceiveAudio: 1,
-  offerToReceiveVideo: 1
-};
+function pageReady() {
 
-const buttonStartLocal = document.getElementById('buttonStartLocal');
-buttonStartLocal.disabled = false;
+    localVideo = document.getElementById('localVideo');
+    remoteVideo = document.getElementById('remoteVideo');
 
-const buttonStartRemote = document.getElementById('buttonStartRemote');
-buttonStartRemote.disabled = true;
+    var constraints = {
+        video: true,
+        audio: false,
+    };
 
-var local = null;
-var remote = null;
+    if(navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(getUserMediaSuccess)
+            .then(function(){
 
-buttonStartLocal.onclick = function () {
-  buttonStartLocal.disabled = true;
-  var video = document.getElementById("video-local");
-  navigator.mediaDevices
-    .getUserMedia({
-      audio: true,
-      video: true
-    })
-    .then(stream => {
-      console.log('Received local stream');
-      video.srcObject = stream;
+                socket = io.connect();
+                socket.on('signal', gotMessageFromServer);    
 
-      const audioTracks = stream.getAudioTracks();
-      const videoTracks = stream.getVideoTracks();
-      if (audioTracks.length > 0) {
-        console.log(`Using audio device: ${audioTracks[0].label}`);
-      }
-      if (videoTracks.length > 0) {
-        console.log(`Using video device: ${videoTracks[0].label}`);
-      }
+                socket.on('connect', function(){
+
+                    socketId = socket.id;
+
+                    socket.on('user-left', function(id){
+                        var video = document.querySelector('[data-socket="'+ id +'"]');
+                        var parentDiv = video.parentElement;
+                        video.parentElement.parentElement.removeChild(parentDiv);
+                    });
 
 
-      socket.emit('join', room);
-      //buttonStartRemote.disabled = false;
-    })
-    .catch(e => console.log('getUserMedia() error:', e));
+                    socket.on('user-joined', function(id, count, clients){
+                        clients.forEach(function(socketListId) {
+                            if(!connections[socketListId]){
+                                connections[socketListId] = new RTCPeerConnection(peerConnectionConfig);
+                                //Wait for their ice candidate       
+                                connections[socketListId].onicecandidate = function(){
+                                    if(event.candidate != null) {
+                                        console.log('SENDING ICE');
+                                        socket.emit('signal', socketListId, JSON.stringify({'ice': event.candidate}));
+                                    }
+                                }
+
+                                //Wait for their video stream
+                                connections[socketListId].onaddstream = function(){
+                                    gotRemoteStream(event, socketListId)
+                                }    
+
+                                //Add the local video stream
+                                connections[socketListId].addStream(localStream);                                                                
+                            }
+                        });
+
+                        //Create an offer to connect with your local description
+                        
+                        if(count >= 2){
+                            connections[id].createOffer().then(function(description){
+                                connections[id].setLocalDescription(description).then(function() {
+                                    // console.log(connections);
+                                    socket.emit('signal', id, JSON.stringify({'sdp': connections[id].localDescription}));
+                                }).catch(e => console.log(e));        
+                            });
+                        }
+                    });                    
+                })       
+        
+            }); 
+    } else {
+        alert('Your browser does not support getUserMedia API');
+    } 
 }
 
+function getUserMediaSuccess(stream) {
+    localStream = stream;
+    localVideo.srcObject = stream;
+}
 
-buttonStartRemote.onclick = call;
+function gotRemoteStream(event, id) {
 
-function call() {
-  buttonStartRemote.disabled = true;
+    var videos = document.querySelectorAll('video'),
+        video  = document.createElement('video'),
+        div    = document.createElement('div')
 
-  var video = document.getElementById("video-local");
-  var stream = video.srcObject
+    video.setAttribute('data-socket', id);
+    video.srcObject   = event.stream;
+    video.autoplay    = true; 
+    video.muted       = true;
+    video.playsinline = true;
+    
+    div.appendChild(video);      
+    document.querySelector('.videos').appendChild(div);      
+}
 
+function gotMessageFromServer(fromId, message) {
 
-  var rtcPeerConnection = new RTCPeerConnection(servers);
-  var localICECandidates = [];
-  var connected = false;
+    //Parse the incoming signal
+    var signal = JSON.parse(message)
 
+    //Make sure it's not coming from yourself
+    if(fromId != socketId) {
 
-  rtcPeerConnection.addStream(stream);
-
-
-  rtcPeerConnection.onicecandidate = function (event) {
-    var candidate = event.candidate
-    if (connected) {
-      socket.emit('candidate', JSON.stringify(candidate));
-    } else {
-      localICECandidates.push(event.candidate);
+        if(signal.sdp){            
+            connections[fromId].setRemoteDescription(new RTCSessionDescription(signal.sdp)).then(function() {                
+                if(signal.sdp.type == 'offer') {
+                    connections[fromId].createAnswer().then(function(description){
+                        connections[fromId].setLocalDescription(description).then(function() {
+                            socket.emit('signal', fromId, JSON.stringify({'sdp': connections[fromId].localDescription}));
+                        }).catch(e => console.log(e));        
+                    }).catch(e => console.log(e));
+                }
+            }).catch(e => console.log(e));
+        }
+    
+        if(signal.ice) {
+            connections[fromId].addIceCandidate(new RTCIceCandidate(signal.ice)).catch(e => console.log(e));
+        }                
     }
-
-  }
-
-  rtcPeerConnection.onaddstream = function (event) {
-    var remoteVideo = document.getElementById('video-remote');
-    remoteVideo.srcObject = event.stream;
-    //remoteVideo.volume = 0;
-  }
-
-
-  socket.on('candidate', function (candidate) {
-    if (!candidate || candidate === 'null') {
-      return;
-    }
-    console.log("on candidate", candidate);
-    var rtcCandidate = new RTCIceCandidate(JSON.parse(candidate));
-    rtcPeerConnection.addIceCandidate(rtcCandidate);
-  });
-
-  socket.on('answer', function (answer) {
-    if (!answer || answer === 'null') {
-      return;
-    }
-    console.log("on answer");
-    var rtcAnswer = new RTCSessionDescription(JSON.parse(answer));
-    rtcPeerConnection.setRemoteDescription(rtcAnswer);
-    connected = true;
-    localICECandidates.forEach(candidate => {
-      console.log(`>>> Sending local ICE candidate (${candidate.address})`);
-      socket.emit('candidate', JSON.stringify(candidate));
-    });
-    localICECandidates = [];
-  });
-
-  socket.on('offer', function (offer) {
-    if (!offer || offer === 'null') {
-      return;
-    }
-    connected = true;
-    var rtcOffer = new RTCSessionDescription(JSON.parse(offer));
-    rtcPeerConnection.setRemoteDescription(rtcOffer);
-    rtcPeerConnection.createAnswer(
-      function (answer) {
-        console.log(answer);
-        rtcPeerConnection.setLocalDescription(answer);
-        socket.emit('answer', JSON.stringify(answer));
-      },
-      function (err) {
-        console.error(err);
-      }
-    );
-  });
-
-
-  rtcPeerConnection.createOffer(
-    function (offer) {
-      rtcPeerConnection.setLocalDescription(offer);
-      socket.emit('offer', JSON.stringify(offer));
-    },
-    function (err) {
-      console.error(err);
-    }
-  );
-
 }

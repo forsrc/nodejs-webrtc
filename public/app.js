@@ -1,130 +1,137 @@
 var localVideo;
-var firstPerson = false;
 var socketCount = 0;
 var socketId;
 var localStream;
 var connections = [];
 
 var peerConnectionConfig = {
-    'iceServers': [
-        {'urls': 'stun:stun.services.mozilla.com'},
-        {'urls': 'stun:stun.l.google.com:19302'},
-    ]
+  'iceServers': [
+    { 'urls': 'stun:stun.services.mozilla.com' },
+    { 'urls': 'stun:stun.l.google.com:19302' },
+  ]
 };
 
-function pageReady() {
+async function pageReady() {
 
-    localVideo = document.getElementById('localVideo');
-    remoteVideo = document.getElementById('remoteVideo');
+  localVideo = document.getElementById('localVideo');
+  remoteVideo = document.getElementById('remoteVideo');
 
-    var constraints = {
-        video: true,
-        audio: false,
-    };
+  var constraints = {
+    video: true,
+    audio: false,
+  };
 
-    if(navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia(constraints)
-            .then(getUserMediaSuccess)
-            .then(function(){
-
-                socket = io.connect();
-                socket.on('signal', gotMessageFromServer);    
-
-                socket.on('connect', function(){
-
-                    socketId = socket.id;
-
-                    socket.on('user-left', function(id){
-                        var video = document.querySelector('[data-socket="'+ id +'"]');
-                        var parentDiv = video.parentElement;
-                        video.parentElement.parentElement.removeChild(parentDiv);
-                    });
+  if (!navigator.mediaDevices.getUserMedia) {
+    alert('Your browser does not support getUserMedia API');
+    return;
+  }
+  localStream = await navigator.mediaDevices.getUserMedia(constraints);
+  localVideo.srcObject = localStream;
 
 
-                    socket.on('user-joined', function(id, count, clients){
-                        clients.forEach(function(socketListId) {
-                            if(!connections[socketListId]){
-                                connections[socketListId] = new RTCPeerConnection(peerConnectionConfig);
-                                //Wait for their ice candidate       
-                                connections[socketListId].onicecandidate = function(){
-                                    if(event.candidate != null) {
-                                        console.log('SENDING ICE');
-                                        socket.emit('signal', socketListId, JSON.stringify({'ice': event.candidate}));
-                                    }
-                                }
+  socket = io.connect();
+  socket.on('signal', gotMessageFromServer);
 
-                                //Wait for their video stream
-                                connections[socketListId].onaddstream = function(){
-                                    gotRemoteStream(event, socketListId)
-                                }    
+  socket.on('connect', function () {
 
-                                //Add the local video stream
-                                connections[socketListId].addStream(localStream);                                                                
-                            }
-                        });
+    socketId = socket.id;
 
-                        //Create an offer to connect with your local description
-                        
-                        if(count >= 2){
-                            connections[id].createOffer().then(function(description){
-                                connections[id].setLocalDescription(description).then(function() {
-                                    // console.log(connections);
-                                    socket.emit('signal', id, JSON.stringify({'sdp': connections[id].localDescription}));
-                                }).catch(e => console.log(e));        
-                            });
-                        }
-                    });                    
-                })       
-        
-            }); 
-    } else {
-        alert('Your browser does not support getUserMedia API');
-    } 
+    socket.on('user-left', function (id) {
+      left(id);
+    });
+
+
+    socket.on('user-joined', async function (id, count, clients) {
+      clients.forEach(function (socketListId) {
+        if (connections[socketListId]) {
+          return;
+        }
+        connections[socketListId] = new RTCPeerConnection(peerConnectionConfig);
+        //Wait for their ice candidate       
+        connections[socketListId].onicecandidate = function (event) {
+          if (event.candidate != null) {
+            console.log('SENDING ICE');
+            socket.emit('signal', socketListId, JSON.stringify({ 'ice': event.candidate }));
+          }
+        }
+
+        //Wait for their video stream
+        connections[socketListId].onaddstream = function (event) {
+          gotRemoteStream(event, socketListId)
+        }
+
+        //Add the local video stream
+        connections[socketListId].addStream(localStream);
+
+      });
+
+      //Create an offer to connect with your local description
+
+      if (count >= 2) {
+        var description = await connections[id].createOffer();
+        await connections[id].setLocalDescription(description);
+        // console.log(connections);
+        socket.emit('signal', id, JSON.stringify({ 'sdp': connections[id].localDescription }));
+      }
+
+    });
+  });
 }
 
 function getUserMediaSuccess(stream) {
-    localStream = stream;
-    localVideo.srcObject = stream;
+  localStream = stream;
+  localVideo.srcObject = stream;
 }
+
+
+function left(id) {
+  var video = document.querySelector('[data-socket="' + id + '"]');
+  if (video) {
+    var parentDiv = video.parentElement;
+    video.parentElement.parentElement.removeChild(parentDiv);
+  }
+  if (connections[id]) {
+    connections[id].close();
+    connections[id] = null;
+    delete connections[id];
+  }
+};
+
 
 function gotRemoteStream(event, id) {
 
-    var videos = document.querySelectorAll('video'),
-        video  = document.createElement('video'),
-        div    = document.createElement('div')
+  var video = document.createElement('video');
+  var div = document.createElement('div');
 
-    video.setAttribute('data-socket', id);
-    video.srcObject   = event.stream;
-    video.autoplay    = true; 
-    video.muted       = true;
-    video.playsinline = true;
-    
-    div.appendChild(video);      
-    document.querySelector('.videos').appendChild(div);      
+  video.setAttribute('data-socket', id);
+  video.srcObject = event.stream;
+  video.autoplay = true;
+  video.muted = true;
+  video.playsinline = true;
+
+  div.appendChild(video);
+  document.querySelector('.videos').appendChild(div);
 }
 
-function gotMessageFromServer(fromId, message) {
+async function gotMessageFromServer(fromId, message) {
 
-    //Parse the incoming signal
-    var signal = JSON.parse(message)
+  //Parse the incoming signal
+  var signal = JSON.parse(message)
 
-    //Make sure it's not coming from yourself
-    if(fromId != socketId) {
+  //Make sure it's not coming from yourself
+  if (fromId == socketId) {
+    return;
+  }
 
-        if(signal.sdp){            
-            connections[fromId].setRemoteDescription(new RTCSessionDescription(signal.sdp)).then(function() {                
-                if(signal.sdp.type == 'offer') {
-                    connections[fromId].createAnswer().then(function(description){
-                        connections[fromId].setLocalDescription(description).then(function() {
-                            socket.emit('signal', fromId, JSON.stringify({'sdp': connections[fromId].localDescription}));
-                        }).catch(e => console.log(e));        
-                    }).catch(e => console.log(e));
-                }
-            }).catch(e => console.log(e));
-        }
-    
-        if(signal.ice) {
-            connections[fromId].addIceCandidate(new RTCIceCandidate(signal.ice)).catch(e => console.log(e));
-        }                
+  if (signal.sdp) {
+    await connections[fromId].setRemoteDescription(new RTCSessionDescription(signal.sdp))
+    if (signal.sdp.type == 'offer') {
+      var description = await connections[fromId].createAnswer();
+      await connections[fromId].setLocalDescription(description);
+      socket.emit('signal', fromId, JSON.stringify({ 'sdp': connections[fromId].localDescription }));
     }
+  }
+  if (signal.ice) {
+    await connections[fromId].addIceCandidate(new RTCIceCandidate(signal.ice)).catch(e => console.log(e));
+  }
 }
